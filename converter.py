@@ -16,6 +16,7 @@ class Converter(object):
         self.full_properties_list = []
         self.no_properties_found_list = []
         self.debug = debug
+        self.sleep_seconds = 3
 
     def filter_doubles(self):
         last_file = None
@@ -34,8 +35,11 @@ class Converter(object):
 
         for file in self.filtered_list:
             filename = file[0]
-            # Remove everything after first point (extension...)
-            search_term = filename.split('.', 1)[0]
+            # Remove everything after the third last point (extension...)
+            filename_splitted = filename.split('.')
+            search_term = '.'.join(filename_splitted[:-3])
+
+            #search_term = filename.split('.', 1)[0]
             # Convert underscores to spaces
             search_term = search_term.replace("_", " ")
             search_term = search_term.replace("-", " ")
@@ -92,25 +96,48 @@ class Converter(object):
         results = self.discogs_client.search_release(file[2])
         print(file[2])
 
-        # Get the first result, we feel always lucky
-        if not results:
-            # Try with the search term without parentheses content.
-            results = self.discogs_client.search_release(re.sub(r'\(.*\)', '', file[2]))
+        retries = 0
+        while True:
+            try:
+                # Get the first result, we feel always lucky
+                if not results:
+                    # Try with the search term without parentheses content.
+                    results = self.discogs_client.search_release(re.sub(r'\(.*\)', '', file[2]))
 
-            if not results:
-                # Nothing found for this search term, return an empty properties dict with only the filename
-                print("Didn't find any results from discogs")
-                properties = {}
-                properties['Titel'] = file[0]
-                properties['Uitvoerder'] = ''
-                properties['Componist'] = ''
-                properties['Duurtijd'] = ''
-                properties['Label'] = ''
-                return properties
+                    if not results:
+                        # Nothing found for this search term, return an empty properties dict with only the filename
+                        print("Didn't find any results from discogs")
+                        properties = {}
+                        properties['Titel'] = file[0]
+                        properties['Uitvoerder'] = ''
+                        properties['Componist'] = ''
+                        properties['Duurtijd'] = ''
+                        properties['Label'] = ''
+                        return properties
 
-        release = results[0]
+                release = results[0]
+                break
+            except:
+                # sleep 3 seconds and try again
+                time.sleep(self.sleep_seconds)
+                print("I have tried {0} times for {1} seconds".format(retries, self.sleep_seconds))
+                if retries > 5:
+                    raise RuntimeError("Cannot get search results after 6 retries!")
 
-        tracklist = self.build_tracklist(release.tracklist)
+        retries = 0
+        while True:
+            try:
+                release_tracklist = release.tracklist
+                break
+            except:
+                # sleep 3 seconds and try again
+                time.sleep(self.sleep_seconds)
+                print("I have tried {0} times for {1} seconds".format(retries, self.sleep_seconds))
+                if retries > 5:
+                    raise RuntimeError("Cannot get tracklist after 6 retries!")
+                print("Failed fetching the tracklist. Retry")
+
+        tracklist = self.build_tracklist(release_tracklist)
         tracks = [track['title'] for track in tracklist]
         if self.debug:
             print("release data and tracks data")
