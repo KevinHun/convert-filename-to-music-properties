@@ -1,5 +1,8 @@
 import re
+import csv
+import time
 import discogs_client
+from difflib import get_close_matches
 from excel import FilenameExcel
 from helpers import Duration
 from discogs import Discogs
@@ -39,7 +42,7 @@ class Converter(object):
             file.append(search_term)
 
     def convert_to_full_properties(self):
-        full_properties_list = []
+        self.full_properties_list = []
         for file in self.filtered_list:
             results = self.discogs_client.search_release(file[2])
             print(file[2])
@@ -49,12 +52,47 @@ class Converter(object):
             if not results:
                 # Nothing found for this search term, continueing
                 continue
-            result = results[0]
-            properties = {}
-            properties['Titel'] = result.title
-            properties['Uitvoerder'] = ",".join([artist.name for artist in result.artists])
-            properties['Componist'] = ",".join([artist.name for artist in result.credits])
-            properties['Duurtijd'] = file[1].get_in_minutes_seconds()
-            properties['Label'] = ",".join([label.name for label in result.labels])
-            print(properties)
-            full_properties_list.append(properties)
+            release = results[0]
+            tracks = [track.title for track in release.tracklist]
+            best_matches = get_close_matches(file[2], tracks)
+            if not best_matches:
+                # Try again with less match terms.
+                new_search_terms = file[2].split(' ')
+                for search_term in new_search_terms:
+                    best_matches = get_close_matches(search_term, tracks)
+                    if best_matches:
+                        break
+
+            if best_matches:
+                track_title = best_matches[0]
+                for track in release.tracklist:
+                    if track.title == track_title:
+                        break
+
+                properties = {}
+                properties['Titel'] = track.title
+                properties['Uitvoerder'] = ",".join([artist.name for artist in release.artists])
+                properties['Componist'] = ",".join([artist.name for artist in track.credits])
+                if not properties['Componist']:
+                    properties['Componist'] = ",".join([artist.name for artist in release.credits])
+                properties['Duurtijd'] = file[1].get_in_minutes_seconds()
+                properties['Label'] = ",".join([label.name for label in release.labels])
+                print(properties)
+                self.full_properties_list.append(properties)
+            else:
+                print("Didn't find a single match in the track list, I'm sorry")
+            # Sleep 1 second because the discogs api doesn't like us
+            time.sleep(1)
+
+    def export_to_csv(self, file_path, csv_columns=None):
+        if not csv_columns:
+            csv_columns = ['Volgnummer', 'Tijdscode', 'Titel', 'Aard', 'Performance', 'Componist', 'Uitvoerder', 'Duurtijd', 'Rechthebbende', 'Hoedanigheid', 'Jaar', 'ISRC', 'Label', 'Album', 'Cat Nr', 'Track']
+
+        try:
+            with open(file_path, 'w') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=csv_columns)
+                writer.writeheader()
+                for data in self.full_properties_list:
+                    writer.writerow(data)
+        except IOError:
+            print("I/O error")
