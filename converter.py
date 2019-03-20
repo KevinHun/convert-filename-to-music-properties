@@ -1,21 +1,21 @@
 import re
 import csv
 import time
-import discogs_client
 from difflib import get_close_matches
-from excel import FilenameExcel
+from excel import FilenameExcel, ExcelWriter
 from helpers import Duration
 from discogs import Discogs
 
 
 class Converter(object):
-    def __init__(self, path_to_excel):
+    def __init__(self, path_to_excel, debug=False):
         self.excel = FilenameExcel(path_to_excel)
         self.file_list = self.excel.get_rows()
         self.discogs_client = Discogs()
         self.filtered_list = []
         self.full_properties_list = []
         self.no_properties_found_list = []
+        self.debug = debug
 
     def filter_doubles(self):
         last_file = None
@@ -76,10 +76,21 @@ class Converter(object):
             return track_title
         return False
 
+    @staticmethod
+    def build_tracklist(tracklist):
+        expanded_tracklist = []
+        for track in tracklist:
+            if 'sub_tracks' in track.data.keys():
+                # We're dealing with subtracks. Unpack them.
+                for sub_track in track.data['sub_tracks']:
+                    expanded_tracklist.append(sub_track)
+            else:
+                expanded_tracklist.append(track.data)
+        return expanded_tracklist
+
     def find_properties_with_item(self, file):
         results = self.discogs_client.search_release(file[2])
         print(file[2])
-        print(results.pages)
 
         # Get the first result, we feel always lucky
         if not results:
@@ -98,13 +109,19 @@ class Converter(object):
                 return properties
 
         release = results[0]
-        tracks = [track.title for track in release.tracklist]
+
+        tracklist = self.build_tracklist(release.tracklist)
+        tracks = [track['title'] for track in tracklist]
+        if self.debug:
+            print("release data and tracks data")
+            print(release.data)
+            print(tracks)
         track_name = self.find_track_in_tracklist(file, tracks)
 
         if not track_name:
             # If there's still no track found. It might be because the tracklist contains text between () which we don't like!
             # get this text out and repeat.
-            tracks = [re.sub(r'\(.*\)', '', track.title) for track in release.tracklist]
+            tracks = [re.sub(r'\(.*\)', '', track['title']) for track in tracklist]
             track_name = self.find_track_in_tracklist(file, tracks)
             if not track_name:
                 # Nothing found for this search term, return an empty properties dict with only the filename
@@ -117,29 +134,29 @@ class Converter(object):
                 properties['Label'] = ''
                 return properties
             else:
-                for track in release.tracklist:
-                    track_title = re.sub(r'\(.*\)', '', track.title)
+                for track in tracklist:
+                    track_title = re.sub(r'\(.*\)', '', track['title'])
                     if track_title == track_name:
                         break
         else:
-            for track in release.tracklist:
-                if track.title == track_name:
+            for track in tracklist:
+                if track['title'] == track_name:
                     break
 
         properties = {}
-        properties['Titel'] = track.title
+        properties['Titel'] = track['title']
         properties['Uitvoerder'] = ",".join(set([artist.name for artist in release.artists]))
         # Get all the writers
         writers = []
-        if 'extraartists' in track.data.keys():
-            for extra_artist in track.data['extraartists']:
-                if extra_artist['role'] == 'Written-By':
+        if 'extraartists' in track.keys():
+            for extra_artist in track['extraartists']:
+                if extra_artist['role'] == 'Written-By' or extra_artist['role'] == 'Written-By, Composed By':
                     writers.append(extra_artist['name'])
             # if no writers found on the track. Let's get the writers of the release
-        if 'extraartists' in release.data.keys():
-            if not writers:
+        if not writers:
+            if 'extraartists' in release.data.keys():
                 for extra_artist in release.data['extraartists']:
-                    if extra_artist['role'] == 'Written-By':
+                    if extra_artist['role'] == 'Written-By' or extra_artist['role'] == 'Written-By, Composed By':
                         writers.append(extra_artist['name'])
 
         properties['Componist'] = ",".join(set(writers))
@@ -174,3 +191,10 @@ class Converter(object):
                     writer.writerow(data)
         except IOError:
             print("I/O error")
+
+    def export_to_excel(self, file_path, excel_columns=None):
+        if not excel_columns:
+            excel_columns = ['Volgnummer', 'Tijdscode', 'Titel', 'Aard', 'Performance', 'Componist', 'Uitvoerder',
+                             'Duurtijd','Rechthebbende', 'Hoedanigheid', 'Jaar', 'ISRC', 'Label', 'Album', 'Cat Nr', 'Track']
+        excel_writer = ExcelWriter(file_path)
+        excel_writer.create_excel(self.full_properties_list, excel_columns)
