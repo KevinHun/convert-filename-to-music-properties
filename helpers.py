@@ -1,3 +1,5 @@
+from lxml import etree
+
 class Duration(object):
     def __init__(self, duration):
         hours, minutes, seconds, miliseconds = duration.split(':', 3)
@@ -35,4 +37,27 @@ class Duration(object):
         if self.miliseconds > 50:
             # round up
             extra_second = 1
-        return "{0}:{1}".format(self.minutes + extra_minutes, self.seconds + extra_second)
+        return "{0}:{1}".format(str(self.minutes + extra_minutes).zfill(2), str(self.seconds + extra_second).zfill(2))
+
+
+def convert_to_xml(data, fields, file_path):
+    print('test')
+    root = etree.Element('CopyRightXml')
+    for item in data:
+        copyright_element = etree.Element('CopyRight')
+        root.append(copyright_element)
+
+        # Build all xml elements from the fields.
+        field_dict = {}
+        for field in fields:
+            field_dict[field] = etree.Element(field)
+            copyright_element.append(field_dict[field])
+
+        for key, value in item.items():
+            field_dict[key].text = filter_weird_chars(value)
+    etree.ElementTree(root).write(file_path, encoding="UTF-8", xml_declaration=True)
+
+
+def filter_weird_chars(string_to_replace):
+    filtered_string = str(string_to_replace).replace('#', '').replace('<', '').replace('>', '').replace('/', '')
+    return filtered_string
