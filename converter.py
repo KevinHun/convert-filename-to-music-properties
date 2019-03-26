@@ -8,7 +8,7 @@ from discogs import Discogs
 
 
 class Converter(object):
-    def __init__(self, path_to_excel, debug=False, format='xls', default_labels=None):
+    def __init__(self, path_to_excel, debug=False, format_excel='xls', default_labels=None):
         self.excel = FilenameExcel(path_to_excel)
         self.file_list = self.excel.get_rows()
         self.discogs_client = Discogs()
@@ -16,7 +16,7 @@ class Converter(object):
         self.full_properties_list = []
         self.debug = debug
         self.sleep_seconds = 3
-        self.format = format
+        self.format = format_excel
         self.default_labels = default_labels
 
     def filter_doubles(self):
@@ -36,11 +36,14 @@ class Converter(object):
 
         for file in self.filtered_list:
             filename = file[0]
-            # Remove everything after the third last point (extension...)
-            filename_splitted = filename.split('.')
-            search_term = '.'.join(filename_splitted[:-3])
+            # Check if this instance is a file name (pattern: filename.ext.new.01 )
+            if '.new.' in filename:
+                # Remove everything after the third last point (extension...)
+                filename_splitted = filename.split('.')
+                search_term = '.'.join(filename_splitted[:-3])
+            else:
+                search_term = filename
 
-            #search_term = filename.split('.', 1)[0]
             # Convert underscores to spaces
             search_term = search_term.replace("_", " ")
             search_term = search_term.replace("-", " ")
@@ -109,10 +112,10 @@ class Converter(object):
                         # Nothing found for this search term, return an empty properties dict with only the filename
                         print("Didn't find any results from discogs")
                         properties = {}
-                        properties['Title'] = file[0]
-                        properties['Performer'] = ''
-                        properties['Composer'] = ''
-                        properties['Duration'] = ''
+                        properties['Titel'] = file[0]
+                        properties['Uitvoerder'] = ''
+                        properties['Componist'] = ''
+                        properties['Duurtijd'] = ''
                         properties['Label'] = ''
                         return properties
 
@@ -155,10 +158,10 @@ class Converter(object):
                 # Nothing found for this search term, return an empty properties dict with only the filename
                 print("Didn't find the correct track!")
                 properties = {}
-                properties['Title'] = file[0]
-                properties['Performer'] = ''
-                properties['Composer'] = ''
-                properties['Duration'] = ''
+                properties['Titel'] = file[0]
+                properties['Uitvoerder'] = ''
+                properties['Componist'] = ''
+                properties['Duurtijd'] = ''
                 properties['Label'] = ''
                 return properties
             else:
@@ -172,8 +175,8 @@ class Converter(object):
                     break
 
         properties = {}
-        properties['Title'] = track['title']
-        properties['Performer'] = ",".join(set([artist.name for artist in release.artists]))
+        properties['Titel'] = track['title']
+        properties['Uitvoerder'] = ",".join(set([artist.name for artist in release.artists]))
         # Get all the writers
         writers = []
         if 'extraartists' in track.keys():
@@ -187,10 +190,10 @@ class Converter(object):
                     if extra_artist['role'] == 'Written-By' or extra_artist['role'] == 'Written-By, Composed By':
                         writers.append(extra_artist['name'])
 
-        properties['Composer'] = ",".join(set(writers))
-        properties['Duration'] = file[1].get_in_minutes_seconds()
+        properties['Componist'] = ",".join(set(writers))
+        properties['Duurtijd'] = file[1].get_in_minutes_seconds()
         properties['Label'] = ",".join(set([label.name for label in release.labels]))
-        properties['Year'] = release.year
+        properties['Jaar'] = release.year
         # populate default labels
         for key, label in self.default_labels.items():
             properties[key] = label
@@ -214,8 +217,8 @@ class Converter(object):
 
     def export_to_csv(self, file_path, csv_columns=None):
         if not csv_columns:
-            csv_columns = ['Volgnummer', 'Sequence', 'Title', 'Kind', 'PerformanceCode', 'Composer', 'Performer',
-                             'Duration','Holder', 'Function', 'Year', 'ISRC', 'Label', 'Album', 'CatNr', 'Track']
+            csv_columns = ['Volgnummer', 'Tijdscode', 'Titel', 'Aard', 'Performance', 'Componist', 'Uitvoerder',
+                           'Duurtijd','Rechthebbende', 'Hoedanigheid', 'Jaar', 'ISRC', 'Label', 'Album', 'Cat Nr', 'Track']
 
         try:
             with open(file_path, 'w') as csv_file:
@@ -228,17 +231,17 @@ class Converter(object):
 
     def export_to_excel(self, file_path, excel_columns=None):
         if not excel_columns:
-            excel_columns = ['Volgnummer', 'Sequence', 'Title', 'Kind', 'PerformanceCode', 'Composer', 'Performer',
-                             'Duration','Holder', 'Function', 'Year', 'ISRC', 'Label', 'Album', 'CatNr', 'Track']
+            excel_columns = ['Volgnummer', 'Tijdscode', 'Titel', 'Aard', 'Performance', 'Componist', 'Uitvoerder',
+                             'Duurtijd','Rechthebbende', 'Hoedanigheid', 'Jaar', 'ISRC', 'Label', 'Album', 'Cat Nr', 'Track']
         excel_writer = ExcelWriter(file_path)
         if self.format == 'xls':
-            excel_writer.create_excel_xls(self.full_properties_list, excel_columns)
+            excel_writer.create_excel_xls(self.full_properties_list, excel_columns, 'CopyRights')
         else:
-            excel_writer.create_excel_xlsx(self.full_properties_list, excel_columns)
+            excel_writer.create_excel_xlsx(self.full_properties_list, excel_columns, 'CopyRights')
 
     def export_to_xml(self, file_path, xml_elements=None):
         if not xml_elements:
-            xml_elements = ['Volgnummer', 'Sequence', 'Title', 'Kind', 'PerformanceCode', 'Composer', 'Performer',
-                             'Duration','Holder', 'Function', 'Year', 'ISRC', 'Label', 'Album', 'CatNr', 'Track']
+            xml_elements = ['Volgnummer', 'Tijdscode', 'Titel', 'Aard', 'Performance', 'Componist', 'Uitvoerder',
+                            'Duurtijd','Rechthebbende', 'Hoedanigheid', 'Jaar', 'ISRC', 'Label', 'Album', 'Cat Nr', 'Track']
 
         convert_to_xml(self.full_properties_list, xml_elements, file_path)

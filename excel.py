@@ -1,7 +1,6 @@
 import pandas as pd
 import xlsxwriter
 import xlwt
-from helpers import filter_weird_chars
 
 
 class FilenameExcel(object):
@@ -21,16 +20,17 @@ class FilenameExcel(object):
     def get_rows(self):
         rows = []
         for index, row in self.excel.iterrows():
-            rows.append([filter_weird_chars(row['Name']), row['Duration']])
+            rows.append([row['Name'], row['Duration']])
         return rows
+
 
 class ExcelWriter(object):
     def __init__(self, file_path):
         self.file_path = file_path
 
-    def create_excel_xlsx(self, data, excel_columns):
+    def create_excel_xlsx(self, data, excel_columns, sheetname):
         workbook = xlsxwriter.Workbook(self.file_path)
-        worksheet = workbook.add_worksheet()
+        worksheet = workbook.add_worksheet(sheetname)
 
         row = 0
         col = 0
@@ -48,9 +48,9 @@ class ExcelWriter(object):
 
         workbook.close()
 
-    def create_excel_xls(self, data, excel_columns):
+    def create_excel_xls(self, data, excel_columns, sheet_name):
         workbook = xlwt.Workbook('/home/khunyadi/Downloads/template.xls')
-        worksheet = workbook.add_sheet('sheet')
+        worksheet = workbook.add_sheet(sheet_name)
 
         row = 0
         col = 0

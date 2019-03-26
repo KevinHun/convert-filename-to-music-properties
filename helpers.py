@@ -1,7 +1,10 @@
 from lxml import etree
 
+
 class Duration(object):
     def __init__(self, duration):
+        if not isinstance(duration, str):
+            duration = '00:00:00:00'
         hours, minutes, seconds, miliseconds = duration.split(':', 3)
         self.hours = int(hours)
         self.minutes = int(minutes)
